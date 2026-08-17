@@ -1,0 +1,58 @@
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    // 1. Yükleme Linki Oluşturma API'si
+    if (url.pathname === '/api/get-upload-url' && request.method === 'POST') {
+      const { filename, filetype } = await request.json();
+      const fileKey = `${crypto.randomUUID()}-${filename}`;
+
+      const s3 = new S3Client({
+        region: 'auto',
+        endpoint: `https://${env.ACCOUNT_ID}.r2.cloudflarestorage.com`,
+        credentials: {
+          accessKeyId: env.ACCESS_KEY_ID,
+          secretAccessKey: env.SECRET_ACCESS_KEY,
+        },
+      });
+
+      const command = new PutObjectCommand({
+        Bucket: 'dosya-deposu',
+        Key: fileKey,
+        ContentType: filetype,
+      });
+
+      const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 7200 });
+      return new Response(JSON.stringify({ uploadUrl, fileKey }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // 2. İndirme Bağlantısı Yönlendirmesi
+    if (url.pathname.startsWith('/download/')) {
+      const key = url.pathname.replace('/download/', '');
+      const s3 = new S3Client({
+        region: 'auto',
+        endpoint: `https://${env.ACCOUNT_ID}.r2.cloudflarestorage.com`,
+        credentials: {
+          accessKeyId: env.ACCESS_KEY_ID,
+          secretAccessKey: env.SECRET_ACCESS_KEY,
+        },
+      });
+
+      const command = new GetObjectCommand({
+        Bucket: 'dosya-deposu',
+        Key: key,
+      });
+
+      const downloadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      return Response.redirect(downloadUrl, 302);
+    }
+
+    // Statik dosyaları (public/index.html) sun
+    return env.ASSETS.fetch(request);
+  },
+};
