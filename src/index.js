@@ -20,7 +20,7 @@ export default {
       });
 
       const command = new PutObjectCommand({
-        Bucket: 'dosya-deposu',
+        Bucket: 'dosyadeposu',
         Key: fileKey,
         ContentType: filetype,
       });
